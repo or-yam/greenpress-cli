@@ -2,10 +2,10 @@ const { execSync } = require('child_process');
 const { existsSync, mkdirSync } = require('fs');
 const devDir = process.cwd() + "/dev";
 const repos = {
-	'authentication': 'https://github.com/greenpress/authentication-service',
-	'admin-panel': 'https://github.com/greenpress/admin-panel',
-	'secrets': 'https://github.com/greenpress/secrets-service',
-	'assets': 'https://github.com/greenpress/assets-service',
+	'authentication-service': 'https://github.com/greenpress/authentication-service',
+	'admin-panel-service': 'https://github.com/greenpress/admin-panel',
+	'secrets-service': 'https://github.com/greenpress/secrets-service',
+	'assets-service': 'https://github.com/greenpress/assets-service',
 	'content': 'https://github.com/greenpress/content-service',
 	'blog-front': 'https://github.com/greenpress/blog-front'
 };
@@ -35,7 +35,7 @@ function setServiceCommand(program) {
 async function createOptionFunc(services) {
 	console.log(services)
 	for (let service of services) {
-		let cloneCommand = `cd ${devDir} && git clone ${repos[service]}`;
+		let cloneCommand = `cd ${devDir} && git clone ${repos[service]}`
 		execSync(cloneCommand, (error, stdout, stderr) => {
 			if (error) {
 				console.log(error.message);
@@ -51,5 +51,4 @@ async function createOptionFunc(services) {
 		});
 	}
 }
-
 module.exports = setServiceCommand;
