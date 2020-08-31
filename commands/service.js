@@ -10,32 +10,32 @@ const repos = {
 	'front': 'https://github.com/greenpress/blog-front'
 };
 
-const optionsFuncs = {
-	'create': createOptionFunc
-};
-
 function setServiceCommand(program) {
 	program
 	.command('service')
 	.option('-c, --create')
 	.description('')
-	.action(async function () {
+	.action(async function (options) {
 		// create dev folder if not existing
 		if (!existsSync(devDir)) {
 			mkdirSync(devDir);
 		}
 
 		// iterate over options and activate relevent function
-		for (let option of program.options) {
-			console.log(option, typeof(option))
-			// optionsFuncs[option](program.options);
+		for (let option of options.options) {
+			switch(option.flags)
+			{
+			case '-c, --create':
+				createOptionFunc(options.create.split(','));
+			}
 		}
 	});
 }
 
-async function createOptionFunc(options) {
-	for (let service of options.create.split(',')) {
-		let cloneCommand = `cd ${devDir} && git clone ${repos[service]}`
+async function createOptionFunc(services) {
+	for (let service of services) {
+		console.log(repos[service])
+		// let cloneCommand = `cd ${devDir} && git clone ${repos[service]}`
 	}
 }
 module.exports = setServiceCommand;
