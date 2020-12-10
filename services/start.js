@@ -1,5 +1,7 @@
-const { spawn } = require('child_process');
+const { appendToDockerConfig } = require('../services/docker-service');
 const { green, blue, red } = require('../utils/colors');
+const exec = require('util').promisify(require('child_process').exec);
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 const servicesEnvsAndRepos = {
 	'auth': ['AUTH_SERVICE_CWD', 'authentication-service'],
@@ -7,41 +9,25 @@ const servicesEnvsAndRepos = {
 	'assets': ['ASSETS_SERVICE_CWD', 'assets-service'],
 	'content': ['CONTENT_SERVICE_CWD', 'content-service'],
 	'admin': ['ADMIN_SERVICE_CWD', 'admin-panel'],
-	'front': ['FRONT_SERVICE_CWD', 'blog-front']
+	'front': ['FRONT_SERVICE_CWD', 'blog-front'],
+	'drafts': ['DRAFTS_SERVICE_CWD', 'drafts-service']
 };
 
-function setDevRepo(service) {
-	if (servicesEnvsAndRepos[service] !== undefined) {
-		process.env[servicesEnvsAndRepos[service][0]] = process.cwd() + '/dev/' + servicesEnvsAndRepos[service][1];
-		return true;
-	} 
-	
-	return false;
+function getDevPath(service) {
+	return servicesEnvsAndRepos[service] !== undefined ?
+	       `${servicesEnvsAndRepos[service][0]}=${'dev/' + servicesEnvsAndRepos[service][1]}\n` :
+	       '';
 }
-
-async function waitForServerReady(spawnArgs) {
-	const child = spawn('npm', spawnArgs, { detached: true });
-	child.stdout.on('data', (data) => {
-		if(data && data.toString().includes('READY  Server listening')) {
-			return true;
-		}
-	});
-
-	child.on('error', (error) => {
-		console.log(`error: ${error}`);
-		return false;
-	});
-
-	return true;
-}
-
 
 async function chooseLocal(mode, localServices) {
+	let servicesPaths = '';
 	if (mode === 'dev' && localServices) {
 		console.log(blue(`Chose to locally run ${localServices} services`));
 		for (const service of localServices.split(',')) {
-			if (setDevRepo(service) === true) {
+			const servicePath = getDevPath(service);
+			if (servicePath !== '') {
 				console.log(green(`Set ${service} to dev path!`));
+				servicesPaths += `${servicePath}\n`;
 			} else {
 				console.log(red(`${service} is not a valid option!`));
 				return false;
@@ -49,19 +35,55 @@ async function chooseLocal(mode, localServices) {
 		}
 	}
 
-	return true;
+	return appendToDockerConfig(servicesPaths);
 }
 
-async function getAppArgs(mode, excludedServices) {
-	const appArgs = mode === 'user' ? [ 'start' ] : [ 'run', 'dev' ];
-	if (typeof excludedServices === 'string') {
-		appArgs.push(`--x=${excludedServices}`);
+async function getAppArgs(mode) {
+	return mode === 'user' ? [ 'run', 'local' ] : [ 'run', 'local:dev' ];
+}
+
+async function checkServerUp(idx) {
+	const sleepTime = 5000;
+	if (idx == 25) {
+		return false;
 	}
 
-	return appArgs
+	try {
+		const { stdout } = await exec('docker logs greenpress_greenpress_1');
+	
+		const serverOutput = await checkServerLog(stdout);
+		if ('READY  Server listening' === serverOutput) {
+			return true;
+		} 
+		
+		if ('PM2 successfully stopped' === serverOutput) {
+			console.log(red('An error occurred, check server logs to see what happened'));
+			process.exit(1);
+		}
+	} catch (e) {
+		await sleep(sleepTime);
+		return checkServerUp(idx + 1);
+	}
+	
+	await sleep(sleepTime);
+	return checkServerUp(idx + 1);
+}
+
+async function checkServerLog(stdout) {
+	if (stdout.toString().includes('READY  Server listening')) {
+		return 'READY  Server listening';
+	}
+	
+	if (stdout.toString().includes('PM2 successfully stopped')) {
+		return 'PM2 successfully stopped';
+	}
+
+	return '';
 }
 
 module.exports = {
 	chooseLocal,
-	getAppArgs
+	getAppArgs,
+	checkServerUp,
+	checkServerLog
 }

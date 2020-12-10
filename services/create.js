@@ -1,13 +1,14 @@
 const fs = require('fs');
 const execute = require('../utils/execute');
 const { blue } = require('../utils/colors');
+const { join } = require('path');
 
-function clone(name, type = 'default') {
+async function clone(name, type = 'default') {
 	const repoPath = type === 'pm2' ?
 		'https://github.com/greenpress/greenpress-pm2' :
 		'https://github.com/greenpress/greenpress';
 
-	execute(`git clone ${repoPath} ${name}`, 'clone greenpress')
+	return await execute(`git clone ${repoPath} ${name}`, 'clone greenpress')
 }
 
 function setServiceVersion(packagePath, service, version) {
@@ -18,17 +19,44 @@ function setServiceVersion(packagePath, service, version) {
 }
 
 function renameOrigin(name) {
-	execute(`cd ${name} && git remote rename origin gp`, 'rename greenpress origin to gp');
+	execute(`git remote rename origin gp`, 'rename greenpress origin to gp', { cwd: join(process.cwd(), name) });
 }
 
-function installDependencies(name) {
-	execute(`cd ${name} && npm install`, 'install application', { stdio: 'inherit' });
-}
+async function SetupEnvForWindows(name) {
+	try {
+		const composePath = join(process.cwd(), name, 'compose');
+		if (!(await execute('npm run envs', 
+		      'create env files needed to run with docker-compose', 
+		      { cwd:  composePath }))) {
+				return false;
+			}
+		
+		let envContent = '';
+		const envFilePath = join(composePath, '.env');
+		const envFile = fs.readFileSync(envFilePath).toString();
+		
+		envFile.split('\n').forEach(element => {
+			if (element.includes('MONGODB_VOLUME')) {
+				const volumeSpecs = element.split('=');
+				envContent += `${volumeSpecs[0]}=${volumeSpecs[1].replace('/', '\\')}\n`
+			} else {
+				envContent += `${element}\n`;
+			}
+		});
 
+		fs.truncateSync(envFilePath, 0);
+		fs.writeFileSync(envFilePath, envContent);
+	} catch (e) {
+		console.log(red(`An error occured while setting env correctly. Error: ${e.message}`));
+		return false;
+	}
+	
+	return true;
+}
 
 module.exports = {
 	clone,
 	setServiceVersion,
 	renameOrigin,
-	installDependencies
+	SetupEnvForWindows
 }
